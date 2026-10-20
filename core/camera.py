@@ -327,20 +327,63 @@ class CameraManager:
             time.sleep(0.08)
 
     def _create_placeholder(self, text="KAMERA TIDAK TERHUBUNG"):
-        """Membuat frame placeholder informatif jika kamera terputus."""
-        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-        placeholder[:] = (25, 20, 15)
+        """
+        Membuat frame placeholder informatif dan modern persis seperti desain image.png
+        jika kamera terputus atau sedang memulai inisialisasi.
+        """
+        h, w = 480, 640
+        placeholder = np.zeros((h, w, 3), dtype=np.uint8)
+        placeholder[:] = (25, 15, 11)  # Dark navy slate background (BGR)
 
-        # Border
-        cv2.rectangle(placeholder, (10, 10), (630, 470), (45, 35, 25), 2)
+        try:
+            import os
+            from PIL import Image, ImageDraw, ImageFont
 
-        # Teks Panduan & Status
-        cv2.putText(placeholder, text.upper(), (80, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (80, 80, 240), 2, cv2.LINE_AA)
-        cv2.putText(placeholder, "1. Pastikan shutter fisik kamera laptop terbuka.", (70, 235), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(placeholder, "2. Pastikan tidak ada aplikasi lain (Zoom/Teams) memakai kamera.", (70, 265), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(placeholder, "3. Untuk menghubungkan HP, buka aplikasi Iriun Webcam di HP.", (70, 295), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (130, 200, 130), 1, cv2.LINE_AA)
-        cv2.putText(placeholder, "4. Gunakan dropdown di atas untuk memilih kamera secara manual.", (70, 325), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (140, 170, 240), 1, cv2.LINE_AA)
-        return placeholder
+            pil_img = Image.fromarray(cv2.cvtColor(placeholder, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(pil_img)
+
+            # Font setup
+            font_candidates = [
+                "C:/Windows/Fonts/segoeuib.ttf",
+                "C:/Windows/Fonts/arialbd.ttf",
+                "C:/Windows/Fonts/segoeui.ttf",
+                "C:/Windows/Fonts/arial.ttf"
+            ]
+            chosen = None
+            for p in font_candidates:
+                if os.path.exists(p):
+                    chosen = p
+                    break
+
+            font_m = ImageFont.truetype(chosen, 13) if chosen else ImageFont.load_default()
+            font_s = ImageFont.truetype(chosen, 11) if chosen else ImageFont.load_default()
+            mono_p = "C:/Windows/Fonts/consola.ttf" if os.path.exists("C:/Windows/Fonts/consola.ttf") else chosen
+            font_mono = ImageFont.truetype(mono_p, 12) if mono_p else ImageFont.load_default()
+
+            cx, cy = w // 2, h // 2
+
+            # 1. Ikon Kamera Modern di Tengah
+            cam_w, cam_h = 44, 30
+            body_box = [cx - cam_w // 2, cy - cam_h // 2 - 5, cx + cam_w // 2, cy + cam_h // 2 - 5]
+            draw.rounded_rectangle(body_box, radius=6, fill=(100, 116, 139))
+            draw.rounded_rectangle([cx - 10, cy - cam_h // 2 - 10, cx + 10, cy - cam_h // 2 - 4], radius=3, fill=(100, 116, 139))
+            draw.ellipse([cx - 8, cy - cam_h // 2 + 3, cx + 8, cy - cam_h // 2 + 19], fill=(25, 15, 11))
+
+            # 2. Teks Placeholder Monospace di Bawah Kamera
+            pl_text = "MJPEG STREAM PLACEHOLDER (/video_feed)"
+            bbox = font_mono.getbbox(pl_text)
+            tw = bbox[2] - bbox[0]
+            draw.text((cx - tw // 2, cy + 24), pl_text, font=font_mono, fill=(56, 189, 248))
+
+            return cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
+
+            return cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
+
+        except Exception as e:
+            # Fallback jika terjadi kesalahan Pillow
+            cv2.rectangle(placeholder, (10, 10), (630, 470), (45, 35, 25), 2)
+            cv2.putText(placeholder, text.upper(), (80, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (80, 80, 240), 2, cv2.LINE_AA)
+            return placeholder
 
     def get_frame(self):
         """Mengembalikan tuple: (frame, is_live)"""

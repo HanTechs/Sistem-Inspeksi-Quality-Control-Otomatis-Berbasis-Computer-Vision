@@ -26,6 +26,11 @@ class DefectDetector:
         self.conf_threshold = conf_threshold
         self.imgsz = imgsz
         
+        # Inisialisasi font untuk rendering bounding box modern bergaya UI mockup (image.png)
+        self.font_main = None
+        self.font_status = None
+        self._init_fonts()
+
         # 1. Muat Stage 1 Model: Pretrained Spoon Verifier (COCO class 44 = spoon)
         try:
             self.spoon_model = YOLO(self.spoon_model_path)
@@ -55,6 +60,120 @@ class DefectDetector:
         self.last_action_time = 0
         self.cooldown_period = 2.0
         self.last_model_check_time = 0
+
+    def _init_fonts(self):
+        """Memuat font antialiased untuk bounding box modern sesuai template image.png."""
+        try:
+            from PIL import ImageFont
+            font_candidates = [
+                "C:/Windows/Fonts/segoeuib.ttf",
+                "C:/Windows/Fonts/arialbd.ttf",
+                "C:/Windows/Fonts/segoeui.ttf",
+                "C:/Windows/Fonts/arial.ttf"
+            ]
+            chosen = None
+            for p in font_candidates:
+                if os.path.exists(p):
+                    chosen = p
+                    break
+            if chosen:
+                self.font_main = ImageFont.truetype(chosen, 13)
+                self.font_status = ImageFont.truetype(chosen, 11)
+            else:
+                self.font_main = ImageFont.load_default()
+                self.font_status = ImageFont.load_default()
+        except Exception as e:
+            print(f"[DefectDetector] Peringatan memuat font: {e}")
+            self.font_main = None
+            self.font_status = None
+
+    def _draw_modern_box(self, img, box, label, conf, status="NG", is_ng=True):
+        """
+        Menggambar bounding box modern bersudut bulat (rounded) dengan badge label
+        dan badge status (NG/OK) persis seperti desain image.png.
+        """
+        x1, y1, x2, y2 = [int(v) for v in box]
+        h, w = img.shape[:2]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w - 1, x2), min(h - 1, y2)
+
+        if x2 - x1 < 15 or y2 - y1 < 15:
+            return img
+
+        # Skema Warna sesuai image.png
+        if is_ng:
+            box_color = (239, 68, 68)      # Modern Red #EF4444 (RGB)
+        else:
+            box_color = (16, 185, 129)     # Modern Emerald Green #10B981 (RGB)
+        dark_bg = (15, 23, 42)             # Slate 900 #0F172A (RGB)
+
+        try:
+            from PIL import Image, ImageDraw
+            pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(pil_img)
+
+            box_w = x2 - x1
+            box_h = y2 - y1
+            radius = min(10, box_w // 4, box_h // 4)
+
+            # 1. Garis Luar Bounding Box Bulat (Rounded Box)
+            draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, outline=box_color, width=2)
+
+            # 2. Badge Kiri Atas: 'Label: Conf%' (misal: 'Bent: 89.4%')
+            conf_str = f"{conf * 100:.1f}%" if conf <= 1.0 else f"{conf:.1f}%"
+            label_text = f"{label}: {conf_str}" if label else conf_str
+
+            font_m = self.font_main
+            font_s = self.font_status
+
+            if font_m is not None:
+                bbox = font_m.getbbox(label_text)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+            else:
+                tw, th = len(label_text) * 8, 14
+
+            margin = 5
+            bx1 = x1 + margin
+            by1 = y1 + margin
+            bx2 = min(x2 - margin, bx1 + tw + 14)
+            by2 = min(y2 - margin, by1 + th + 8)
+
+            if bx2 > bx1 and by2 > by1:
+                badge_radius = min(5, (bx2 - bx1) // 2, (by2 - by1) // 2)
+                draw.rounded_rectangle([bx1, by1, bx2, by2], radius=badge_radius, fill=box_color)
+                if font_m is not None:
+                    draw.text((bx1 + 7, by1 + 3), label_text, font=font_m, fill=(255, 255, 255))
+
+            # 3. Badge Kanan Bawah: 'NG' atau 'OK'
+            st_text = status.upper()
+            if font_s is not None:
+                s_bbox = font_s.getbbox(st_text)
+                stw = s_bbox[2] - s_bbox[0]
+                sth = s_bbox[3] - s_bbox[1]
+            else:
+                stw, sth = len(st_text) * 8, 12
+
+            sx2 = x2 - margin
+            sy2 = y2 - margin
+            sx1 = max(x1 + margin, sx2 - stw - 10)
+            sy1 = max(y1 + margin, sy2 - sth - 6)
+
+            if (sx1 > bx1 or sy1 > by2) and sx2 > sx1 and sy2 > sy1:
+                st_radius = min(4, (sx2 - sx1) // 2, (sy2 - sy1) // 2)
+                draw.rounded_rectangle([sx1, sy1, sx2, sy2], radius=st_radius, fill=dark_bg)
+                if font_s is not None:
+                    draw.text((sx1 + 5, sy1 + 2), st_text, font=font_s, fill=(255, 255, 255))
+
+            return cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
+
+        except Exception:
+            # Fallback ke OpenCV standar jika PIL terkendala
+            bgr_color = (box_color[2], box_color[1], box_color[0])
+            cv2.rectangle(img, (x1, y1), (x2, y2), bgr_color, 2)
+            cv2.putText(img, f"{label}: {int(conf*100)}%", (x1 + 6, y1 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, bgr_color, 1)
+            cv2.putText(img, status, (x2 - 25, y2 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            return img
 
     def _load_defect_model(self):
         """Memuat model defect jika file best.pt tersedia di folder models."""
@@ -115,6 +234,7 @@ class DefectDetector:
         # -------------------------------------------------------------
         has_defects = False
         highest_defect_info = None
+        defect_detections = []
 
         if self.defect_model_loaded:
             try:
@@ -127,15 +247,14 @@ class DefectDetector:
                 defect_boxes = defect_results[0].boxes
                 if defect_boxes is not None and len(defect_boxes) > 0:
                     has_defects = True
-                    # Render bounding box cacat dari Ultralytics
-                    annotated_frame = defect_results[0].plot()
-
                     defects = []
                     for b in defect_boxes:
                         cid = int(b.cls[0].item())
                         c_conf = float(b.conf[0].item())
                         c_name = self.class_names.get(cid, f"Defect_{cid}")
+                        xyxy = b.xyxy[0].cpu().numpy().astype(int)
                         defects.append((c_name, c_conf))
+                        defect_detections.append((xyxy, c_name, c_conf))
                     highest_defect_info = max(defects, key=lambda x: x[1])
             except Exception as e:
                 print(f"[DefectDetector Error] Prediksi cacat gagal: {e}")
@@ -168,7 +287,7 @@ class DefectDetector:
                 print(f"[DefectDetector Error] Verifikasi sendok gagal: {e}")
 
         # -------------------------------------------------------------
-        # EVALUASI 3-STATE QUALITY CONTROL
+        # EVALUASI 3-STATE QUALITY CONTROL & BOUNDING BOX MODERN (IMAGE.PNG)
         # -------------------------------------------------------------
 
         # KASUS 1: NG (REJECT) - Ditemukan cacat Scratch atau Bent
@@ -176,22 +295,16 @@ class DefectDetector:
             d_name, d_conf = highest_defect_info
             conf_percent = int(d_conf * 100)
 
-            # Visual Bracket Merah
-            self._draw_brackets(annotated_frame, (roi_x1, roi_y1), (roi_x2, roi_y2), (0, 0, 240), thickness=3)
-
-            # Banner NG di atas
-            cv2.rectangle(annotated_frame, (10, 10), (w - 10, 48), (20, 20, 200), -1)
-            cv2.rectangle(annotated_frame, (10, 10), (w - 10, 48), (0, 0, 255), 2)
-            cv2.putText(
-                annotated_frame,
-                f"DEFECT DETECTED: {d_name.upper()} ({conf_percent}%) | STATUS: REJECT (NG)",
-                (20, 36),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 255, 255),
-                2,
-                cv2.LINE_AA
-            )
+            # Render Bounding Box Cacat Modern Bergaya image.png (Merah, Pill Bent: 89.4%, Badge NG)
+            for xyxy, name, conf_val in defect_detections:
+                annotated_frame = self._draw_modern_box(
+                    annotated_frame,
+                    xyxy,
+                    label=name,
+                    conf=conf_val,
+                    status="NG",
+                    is_ng=True
+                )
 
             # Catat statistik 1 kali per siklus produk
             if not self.object_inspected or (current_time - self.last_action_time > self.cooldown_period):
@@ -213,46 +326,20 @@ class DefectDetector:
                 self.last_action_time = current_time
 
             self.stats["current_status"] = "NG"
-            self.stats["last_defect"] = f"{d_name} ({conf_percent}%)"
+            self.stats["last_defect"] = f"{d_name}: {d_conf * 100:.1f}%"
 
         # KASUS 2: OK (PASS) - Objek TERVERIFIKASI SENDOK dan BEBAS CACAT
         elif spoon_detected and not has_defects:
-            # Visual Bracket Hijau Emerald
-            self._draw_brackets(annotated_frame, (roi_x1, roi_y1), (roi_x2, roi_y2), (0, 220, 100), thickness=3)
-
-            # Gambar Bounding Box Hijau di sekeliling sendok
+            # Render Bounding Box Sendok Hijau Modern (OK)
             for xyxy, sp_conf in spoon_boxes_list:
-                sx1, sy1, sx2, sy2 = xyxy
-                cv2.rectangle(annotated_frame, (sx1, sy1), (sx2, sy2), (0, 220, 100), 2)
-                
-                # Label box sendok
-                lbl_text = f"SPOON: OK (PASS) {int(sp_conf * 100)}%"
-                (tw, th), _ = cv2.getTextSize(lbl_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                cv2.rectangle(annotated_frame, (sx1, max(0, sy1 - 22)), (sx1 + tw + 6, sy1), (0, 200, 90), -1)
-                cv2.putText(
+                annotated_frame = self._draw_modern_box(
                     annotated_frame,
-                    lbl_text,
-                    (sx1 + 3, max(15, sy1 - 6)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    1,
-                    cv2.LINE_AA
+                    xyxy,
+                    label="Spoon",
+                    conf=sp_conf,
+                    status="OK",
+                    is_ng=False
                 )
-
-            # Banner Hijau di bagian atas
-            cv2.rectangle(annotated_frame, (10, 10), (w - 10, 48), (20, 140, 50), -1)
-            cv2.rectangle(annotated_frame, (10, 10), (w - 10, 48), (0, 220, 100), 2)
-            cv2.putText(
-                annotated_frame,
-                "PRODUCT QUALIFIED: SENDOK NORMAL | STATUS: PASS (OK)",
-                (20, 36),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 255, 255),
-                2,
-                cv2.LINE_AA
-            )
 
             # Catat statistik 1 kali per siklus produk
             if not self.object_inspected or (current_time - self.last_action_time > self.cooldown_period):
@@ -282,25 +369,6 @@ class DefectDetector:
 
             if current_time - self.last_action_time > 1.5:
                 self.stats["current_status"] = "STANDBY"
-
-            # Visual Bracket Biru / Cyan
-            self._draw_brackets(annotated_frame, (roi_x1, roi_y1), (roi_x2, roi_y2), (255, 190, 0), thickness=2)
-
-            # Teks status di pojok kiri atas
-            mode_text = "QC STANDBY | MENUNGGU OBJEK SENDOK"
-            if not self.defect_model_loaded:
-                mode_text = "QC STANDBY | MENUNGGU 'best.pt' DI FOLDER models/"
-
-            cv2.putText(
-                annotated_frame,
-                mode_text,
-                (15, 25),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.48,
-                (200, 200, 200),
-                1,
-                cv2.LINE_AA
-            )
 
         return annotated_frame
 
