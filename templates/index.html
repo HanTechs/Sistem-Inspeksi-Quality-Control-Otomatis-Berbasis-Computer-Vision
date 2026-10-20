@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem Inspeksi Quality Control Sendok - YOLOv8n</title>
+    <!-- Google Fonts: Roboto (Heading) & Inter (Body) sesuai materi Tipografi UI/UX -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@500;700;900&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+              heading: ["Roboto", "sans-serif"],
+              mono: ['"Roboto Mono"', "monospace"],
+            },
+            colors: {
+              brand: {
+                blue: "#2563EB",
+                dark: "#0F172A",
+                surface: "#1E293B",
+                danger: "#EF4444",
+                success: "#10B981",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <!-- Font Awesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+      body {
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background-color: #0b0f19;
+        color: #f1f5f9;
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      .font-heading {
+        font-family: "Roboto", sans-serif;
+      }
+      .font-mono {
+        font-family: "Roboto Mono", monospace;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+    <!-- HEADER / NAVIGATION (FR-01) -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-col md:flex-row justify-between items-center shadow-lg gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 bg-blue-600 rounded-lg text-white font-bold text-xl shadow-md">
+          <i class="fa-solid fa-microchip"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold font-heading text-white leading-tight tracking-wide">SISTEM INSPEKSI QUALITY CONTROL SENDOK</h1>
+          <p class="text-xs font-sans text-slate-300">Computer Vision & YOLOv8n Object Detection</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2 bg-slate-900/80 px-3 py-1.5 rounded-md border border-slate-700 text-xs">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-slate-200 font-mono font-medium">SYSTEM: RUNNING</span>
+        </div>
+        <div id="live-clock" class="text-sm font-mono text-slate-200 bg-slate-900 px-3 py-1.5 rounded-md border border-slate-700">00:00:00 WIB</div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+      <!-- SECTION LAYAR 1: DASHBOARD MONITORING & STATISTIK -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- KIRI: LIVE CAMERA FEED (2 COLUMNS) -->
+        <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg flex flex-col">
+          <!-- HEADER STREAM + SELECTOR SUMBER KAMERA & AUTO-SWITCH -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-video text-blue-400"></i>
+                <h2 class="font-bold font-heading text-slate-100">Live Camera Stream</h2>
+              </div>
+            </div>
+
+            <!-- TOOLBAR KONTROL SUMBER KAMERA & AUTO-SWITCH -->
+            <div class="flex flex-wrap items-center gap-2 bg-slate-900/90 p-1.5 rounded-lg border border-slate-700 text-xs">
+              <!-- SELECT DROPDOWN -->
+              <div class="flex items-center space-x-1.5">
+                <i class="fa-solid fa-camera text-blue-400"></i>
+                <label for="camera-select" class="font-medium text-slate-300 hidden md:inline">Kamera:</label>
+                <select
+                  id="camera-select"
+                  onchange="switchCamera(this.value)"
+                  class="bg-slate-800 border border-slate-600 text-slate-100 text-xs rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer max-w-[190px] truncate"
+                >
+                  <option value="0">Memuat kamera...</option>
+                </select>
+              </div>
+
+              <!-- AUTO-SWITCH TOGGLE -->
+              <label
+                class="flex items-center space-x-1.5 cursor-pointer bg-slate-800 hover:bg-slate-750 px-2 py-1 rounded border border-slate-700 transition-colors select-none"
+                title="Otomatis beralih ke Kamera HP (Iriun Webcam) saat terhubung"
+              >
+                <input type="checkbox" id="auto-switch-toggle" checked onchange="toggleAutoSwitch(this.checked)" class="rounded text-blue-500 bg-slate-900 border-slate-600 focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5" />
+                <span class="text-[11px] text-slate-200 font-medium whitespace-nowrap">Auto-Switch Iriun</span>
+              </label>
+
+              <!-- TOMBOL RESCAN KAMERA -->
+              <button
+                onclick="loadCameras(true)"
+                id="btn-refresh-cam"
+                title="Pindai ulang perangkat kamera"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white rounded-md transition-all border border-slate-700"
+              >
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+
+              <!-- TOMBOL PANDUAN IRIUN -->
+              <button onclick="toggleIriunGuide()" title="Panduan menghubungkan Kamera HP (Iriun)" class="p-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 hover:text-blue-300 rounded-md transition-all border border-blue-500/30">
+                <i class="fa-solid fa-circle-question"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- NOTIFIKASI TOAST FEEDBACK KAMERA -->
+          <div id="camera-toast" class="hidden mb-3 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all">
+            <span id="camera-toast-text"></span>
+            <button onclick="hideToast()" class="text-xs opacity-70 hover:opacity-100 ml-2"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+
+          <!-- PANDUAN PENGGUNAAN IRIUN WEBCAM (COLLAPSIBLE) -->
+          <div id="iriun-guide-banner" class="hidden mb-3 bg-blue-950/40 border border-blue-500/40 rounded-lg p-3 text-xs text-blue-200">
+            <div class="flex justify-between items-start">
+              <div class="flex items-start space-x-2">
+                <i class="fa-solid fa-mobile-screen text-blue-400 mt-0.5 text-base"></i>
+                <div class="space-y-1">
+                  <h4 class="font-bold text-white flex items-center gap-1.5">
+                    <span>Cara Menghubungkan Kamera HP via Iriun Webcam:</span>
+                    <span class="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-300 rounded text-[10px] font-mono">AUTO-SWITCH AKTIF</span>
+                  </h4>
+                  <ol class="list-decimal list-inside space-y-0.5 text-slate-300">
+                    <li>Pastikan aplikasi <strong>Iriun Webcam</strong> terpasang di HP (Android/iOS) dan di Laptop.</li>
+                    <li>Hubungkan HP dan Laptop ke <strong>jaringan WiFi yang sama</strong> (atau gunakan <strong>kabel USB</strong>).</li>
+                    <li>Buka aplikasi Iriun Webcam di HP Anda.</li>
+                    <li>Sistem akan <strong>otomatis beralih</strong> ke Kamera HP begitu terhubung! Anda juga bisa memilih manual via menu dropdown di atas.</li>
+                  </ol>
+                </div>
+              </div>
+              <button onclick="toggleIriunGuide()" class="text-slate-400 hover:text-white ml-2 text-sm">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- STREAM CONTAINER DARI FLASK (FR-02) -->
+          <div id="stream-container" class="relative bg-black rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center h-[400px] md:h-[520px] w-full p-0 shadow-inner">
+            <img id="live-stream-img" src="/video_feed" alt="Video Stream" class="w-full h-full object-cover rounded-lg" />
+            <!-- OVERLAY LOADING SAAT BERALIH SUMBER KAMERA -->
+            <div id="stream-loader" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex-col items-center justify-center space-y-2 z-10">
+              <i class="fa-solid fa-circle-notch animate-spin text-3xl text-blue-400"></i>
+              <span id="stream-loader-text" class="text-xs font-mono text-slate-200">Mengalihkan kamera...</span>
+            </div>
+          </div>
+
+          <!-- FOOTER LIVE CAMERA CARD -->
+          <div class="mt-3 flex flex-wrap justify-between items-center text-xs text-slate-300 font-sans gap-2">
+            <span><i class="fa-solid fa-circle-info text-blue-400 mr-1"></i> Mode: Real-time Inference</span>
+            <span id="active-camera-label">Aktif: <strong class="text-blue-400 font-mono">Kamera Laptop</strong></span>
+            <span>FPS: <strong class="text-emerald-400 font-mono">~30</strong> | Model: <strong class="text-slate-100 font-heading">yolov8n.pt</strong></span>
+          </div>
+        </div>
+
+        <!-- KANAN: STATUS INDIKATOR & STATISTIK (1 COLUMN) -->
+        <div class="flex flex-col gap-4">
+          <!-- INDIKATOR STATUS VISUAL (FR-05) -->
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg text-center">
+            <h3 class="text-xs font-bold font-heading text-slate-300 uppercase tracking-wider mb-2.5">Status Kualifikasi Produk</h3>
+            <!-- STATE: STANDBY (Default) -->
+            <div id="status-card" class="bg-amber-500/10 border-2 border-amber-500 rounded-xl p-3.5 flex items-center justify-center space-x-3 transition-all duration-300">
+              <i class="fa-solid fa-arrows-rotate animate-spin text-amber-500 text-2xl"></i>
+              <div class="text-left">
+                <span class="block text-xl font-black font-heading text-amber-500 tracking-wider">STANDBY</span>
+                <span class="text-xs font-sans text-amber-300">Menunggu Deteksi Objek...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- REKAPITULASI STATISTIK (FR-06) -->
+          <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg space-y-2.5">
+            <div class="flex justify-between items-center mb-1">
+              <h3 class="text-xs font-bold font-heading text-slate-300 uppercase tracking-wider">Akumulasi Inspeksi Batch</h3>
+              <span class="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">Real-time</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <!-- Total -->
+              <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                <span class="block text-[11px] font-sans font-medium text-slate-300 mb-0.5">TOTAL</span>
+                <span id="stat-total" class="text-xl font-extrabold text-white font-mono">0</span>
+              </div>
+              <!-- OK -->
+              <div class="bg-slate-900 p-2.5 rounded-lg border border-emerald-500/30">
+                <span class="block text-[11px] font-sans font-medium text-emerald-300 mb-0.5">OK (PASS)</span>
+                <span id="stat-ok" class="text-xl font-extrabold text-emerald-400 font-mono">0</span>
+              </div>
+              <!-- NG -->
+              <div class="bg-slate-900 p-2.5 rounded-lg border border-red-500/30">
+                <span class="block text-[11px] font-sans font-medium text-red-300 mb-0.5">NG (REJECT)</span>
+                <span id="stat-ng" class="text-xl font-extrabold text-red-400 font-mono">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TOMBOL ACTION RESET COUNTER (FR-07) -->
+          <button
+            onclick="openModal()"
+            class="w-full bg-slate-700 hover:bg-red-600 text-white font-bold font-heading py-2.5 px-4 rounded-xl border border-slate-600 hover:border-red-500 transition-all duration-200 shadow-md flex items-center justify-center space-x-2 group text-sm"
+          >
+            <i class="fa-solid fa-rotate-left group-hover:rotate-180 transition-transform duration-300"></i>
+            <span>Reset Counter Statistik</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION LAYAR 3: TABEL RIWAYAT DETEKSI REAL-TIME (FR-08) -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-list-check text-blue-400"></i>
+            <h2 class="font-bold font-heading text-slate-100">Riwayat Deteksi Real-Time (Log History)</h2>
+          </div>
+          <span class="text-xs font-sans text-slate-300"><i class="fa-solid fa-arrows-rotate animate-spin text-blue-400 mr-1"></i> Live Auto-update</span>
+        </div>
+
+        <!-- TABLE CONTAINER -->
+        <div class="overflow-x-auto rounded-lg border border-slate-700">
+          <table class="w-full text-left text-sm text-slate-200">
+            <thead class="bg-slate-900 text-slate-300 text-xs uppercase tracking-wider font-mono">
+              <tr>
+                <th class="px-4 py-3 font-bold">No</th>
+                <th class="px-4 py-3 font-bold">Waktu (Timestamp)</th>
+                <th class="px-4 py-3 font-bold">Status</th>
+                <th class="px-4 py-3 font-bold font-sans">Jenis Cacat</th>
+                <th class="px-4 py-3 font-bold">Confidence Score</th>
+              </tr>
+            </thead>
+            <tbody id="log-table-body" class="divide-y divide-slate-700 font-mono text-xs">
+              <tr class="hover:bg-slate-750/50 bg-slate-800/20">
+                <td colspan="5" class="px-4 py-6 text-center text-slate-400 font-sans">Belum ada data deteksi yang tercatat.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- SECTION LAYAR 2: POP-UP MODAL KONFIRMASI RESET COUNTER (FR-07) -->
+    <div id="resetModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50 transition-opacity duration-300">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl transform scale-95 transition-transform duration-300">
+        <div class="text-center space-y-3">
+          <div class="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-amber-400 text-2xl">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+
+          <h3 class="text-lg font-bold font-heading text-white">Konfirmasi Reset Counter</h3>
+
+          <p class="text-sm text-slate-200 leading-relaxed font-sans">Apakah Anda yakin ingin mereset seluruh akumulasi statistik (<strong class="text-white">Total, OK, dan NG</strong>) untuk batch produksi ini?</p>
+          <p class="text-xs text-amber-300/90 italic font-sans">*Tindakan ini tidak dapat dibatalkan.</p>
+        </div>
+
+        <!-- MODAL BUTTONS -->
+        <div class="mt-6 flex space-x-3">
+          <button onclick="closeModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold font-heading py-2.5 px-4 rounded-xl transition-colors">Batal</button>
+          <button onclick="confirmReset()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold font-heading py-2.5 px-4 rounded-xl transition-colors shadow-lg shadow-red-600/30">Ya, Reset Data</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JAVASCRIPT UNTUK INTERAKSI TEMPLATE -->
+    <script>
+      // Real-time Clock
+      function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString("id-ID", { hour12: false }) + " WIB";
+        document.getElementById("live-clock").textContent = timeString;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // Modal Handlers (Layar 2 Toggle)
+      function openModal() {
+        const modal = document.getElementById("resetModal");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+
+      function closeModal() {
+        const modal = document.getElementById("resetModal");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+
+      // Banner Panduan Iriun
+      function toggleIriunGuide() {
+        const banner = document.getElementById("iriun-guide-banner");
+        banner.classList.toggle("hidden");
+      }
+
+      // Toast Feedback
+      function showToast(message, isError = false) {
+        const toast = document.getElementById("camera-toast");
+        const toastText = document.getElementById("camera-toast-text");
+        toastText.textContent = message;
+        toast.className = `mb-3 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all ${
+          isError ? "bg-red-500/20 text-red-300 border border-red-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+        }`;
+        toast.classList.remove("hidden");
+        setTimeout(() => {
+          hideToast();
+        }, 5000);
+      }
+
+      function hideToast() {
+        const toast = document.getElementById("camera-toast");
+        toast.classList.add("hidden");
+      }
+
+      // Update Badge Status Kamera
+      function updateCameraBadge(isConnected, message) {
+        const badge = document.getElementById("camera-status-badge");
+        if (!badge) return;
+        if (isConnected) {
+          badge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1";
+          badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE';
+        } else {
+          badge.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1";
+          badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> OFFLINE';
+        }
+      }
+
+      // Update Indikator Koneksi HP Iriun
+      function updateIriunIndicator(isConnected) {
+        const indicator = document.getElementById("iriun-status-indicator");
+        if (!indicator) return;
+        indicator.classList.remove("hidden");
+        indicator.classList.add("flex");
+        if (isConnected) {
+          indicator.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1";
+          indicator.innerHTML = '<i class="fa-solid fa-mobile-screen text-emerald-400"></i> HP Terhubung';
+        } else {
+          indicator.className = "px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-700/40 text-slate-400 border border-slate-700 flex items-center gap-1";
+          indicator.innerHTML = '<i class="fa-solid fa-mobile-screen text-slate-500"></i> HP Menunggu';
+        }
+      }
+
+      // Mengubah Status Auto-Switch
+      function toggleAutoSwitch(isChecked) {
+        fetch("/api/set_auto_switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: isChecked }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success") {
+              showToast(data.message);
+            }
+          })
+          .catch((err) => console.error("Gagal mengubah status auto-switch:", err));
+      }
+
+      // Memuat dan Mengisi Dropdown Kamera dari Backend
+      let currentCameraId = 0;
+      let lastProcessedEventId = null;
+
+      function loadCameras(isManualRefresh = false) {
+        const refreshBtn = document.getElementById("btn-refresh-cam");
+        if (refreshBtn) refreshBtn.querySelector("i").classList.add("animate-spin");
+
+        fetch("/api/cameras")
+          .then((res) => res.json())
+          .then((data) => {
+            if (refreshBtn) refreshBtn.querySelector("i").classList.remove("animate-spin");
+            if (data.status === "success") {
+              const select = document.getElementById("camera-select");
+              select.innerHTML = "";
+
+              currentCameraId = data.current_source;
+
+              data.cameras.forEach((cam) => {
+                const opt = document.createElement("option");
+                opt.value = cam.id;
+                opt.textContent = cam.name;
+                if (String(cam.id) === String(data.current_source)) {
+                  opt.selected = true;
+                  const activeLabel = document.getElementById("active-camera-label");
+                  if (activeLabel) activeLabel.innerHTML = `Aktif: <strong class="text-blue-400 font-mono">${cam.name}</strong>`;
+                }
+                select.appendChild(opt);
+              });
+
+              updateCameraBadge(data.is_connected, data.status_message);
+              updateIriunIndicator(data.iriun_connected);
+
+              const toggle = document.getElementById("auto-switch-toggle");
+              if (toggle && typeof data.auto_switch_enabled === "boolean") {
+                toggle.checked = data.auto_switch_enabled;
+              }
+
+              if (isManualRefresh) {
+                showToast("Daftar perangkat kamera berhasil diperbarui.");
+              }
+            }
+          })
+          .catch((err) => {
+            if (refreshBtn) refreshBtn.querySelector("i").classList.remove("animate-spin");
+            console.error("Gagal memuat kamera:", err);
+          });
+      }
+
+      // Mengganti Sumber Kamera secara Dinamis
+      function switchCamera(newCameraId) {
+        const loader = document.getElementById("stream-loader");
+        const loaderText = document.getElementById("stream-loader-text");
+        const select = document.getElementById("camera-select");
+        const selectedOptionName = select.options[select.selectedIndex]?.text || `Kamera ${newCameraId}`;
+
+        loaderText.textContent = `Menghubungkan ke ${selectedOptionName}...`;
+        loader.classList.remove("hidden");
+        loader.classList.add("flex");
+
+        fetch("/api/set_camera", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ camera_id: newCameraId }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setTimeout(() => {
+              loader.classList.add("hidden");
+              loader.classList.remove("flex");
+            }, 500);
+
+            if (data.status === "success") {
+              currentCameraId = newCameraId;
+              const img = document.getElementById("live-stream-img");
+              img.src = "/video_feed?t=" + new Date().getTime();
+
+              const activeLabel = document.getElementById("active-camera-label");
+              if (activeLabel) activeLabel.innerHTML = `Aktif: <strong class="text-blue-400 font-mono">${selectedOptionName}</strong>`;
+
+              showToast(`Berhasil beralih ke: ${selectedOptionName}`);
+              updateCameraBadge(true, "Kamera aktif");
+            } else {
+              showToast(data.message, true);
+              updateCameraBadge(false, data.message);
+              if (selectedOptionName.toLowerCase().includes("iriun")) {
+                const banner = document.getElementById("iriun-guide-banner");
+                banner.classList.remove("hidden");
+              }
+            }
+          })
+          .catch((err) => {
+            loader.classList.add("hidden");
+            loader.classList.remove("flex");
+            showToast("Terjadi kesalahan koneksi saat beralih kamera.", true);
+          });
+      }
+
+      // Polling Data Statistik & Status Kamera
+      setInterval(() => {
+        // Polling statistik inspeksi
+        fetch("/api/stats")
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById("stat-total").innerText = data.total_inspected ?? 0;
+            document.getElementById("stat-ok").innerText = data.total_ok ?? 0;
+            document.getElementById("stat-ng").innerText = data.total_ng ?? 0;
+
+            // Update Status Card Visual (FR-05)
+            const statusCard = document.getElementById("status-card");
+            if (statusCard && data.current_status) {
+              if (data.current_status === "NG") {
+                statusCard.className = "bg-red-500/15 border-2 border-red-500 rounded-xl p-3.5 flex items-center justify-center space-x-3 transition-all duration-300 animate-pulse";
+                statusCard.innerHTML = `
+                  <i class="fa-solid fa-triangle-exclamation text-red-500 text-2xl"></i>
+                  <div class="text-left">
+                    <span class="block text-xl font-black font-heading text-red-500 tracking-wider">DEFECT (NG)</span>
+                    <span class="text-xs font-sans text-red-300">${data.last_defect || "Cacat terdeteksi pada produk"}</span>
+                  </div>`;
+              } else if (data.current_status === "OK") {
+                statusCard.className = "bg-emerald-500/15 border-2 border-emerald-500 rounded-xl p-3.5 flex items-center justify-center space-x-3 transition-all duration-300";
+                statusCard.innerHTML = `
+                  <i class="fa-solid fa-circle-check text-emerald-500 text-2xl"></i>
+                  <div class="text-left">
+                    <span class="block text-xl font-black font-heading text-emerald-400 tracking-wider">PASS (OK)</span>
+                    <span class="text-xs font-sans text-emerald-300">Kondisi produk normal</span>
+                  </div>`;
+              } else {
+                statusCard.className = "bg-amber-500/10 border-2 border-amber-500 rounded-xl p-3.5 flex items-center justify-center space-x-3 transition-all duration-300";
+                statusCard.innerHTML = `
+                  <i class="fa-solid fa-arrows-rotate animate-spin text-amber-500 text-2xl"></i>
+                  <div class="text-left">
+                    <span class="block text-xl font-black font-heading text-amber-500 tracking-wider">STANDBY</span>
+                    <span class="text-xs font-sans text-amber-300">Menunggu Deteksi Objek...</span>
+                  </div>`;
+              }
+            }
+
+            // Update Riwayat Deteksi (Log History) (FR-08)
+            const tbody = document.getElementById("log-table-body");
+            if (tbody && Array.isArray(data.history) && data.history.length > 0) {
+              tbody.innerHTML = data.history.slice(-10).reverse().map((item, idx) => `
+                <tr class="hover:bg-slate-750/50 ${item.status === 'NG' ? 'bg-red-500/5' : 'bg-emerald-500/5'}">
+                  <td class="px-4 py-2.5 font-bold">${item.id || (idx + 1)}</td>
+                  <td class="px-4 py-2.5 text-slate-300">${item.timestamp}</td>
+                  <td class="px-4 py-2.5">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.status === 'NG' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}">
+                      ${item.status}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2.5 text-slate-200 font-sans font-medium">${item.defect_type}</td>
+                  <td class="px-4 py-2.5 font-bold ${item.status === 'NG' ? 'text-amber-400' : 'text-emerald-400'}">${item.confidence}</td>
+                </tr>
+              `).join("");
+            }
+          })
+          .catch((err) => console.error("Gagal mengambil data statistik:", err));
+
+        // Polling status kamera & event auto-switch
+        fetch("/api/camera_status")
+          .then((response) => response.json())
+          .then((status) => {
+            updateCameraBadge(status.is_connected, status.status_message);
+            updateIriunIndicator(status.iriun_connected);
+
+            // Respon event auto-switch secara real-time
+            if (status.last_event && status.last_event.id !== lastProcessedEventId) {
+              lastProcessedEventId = status.last_event.id;
+
+              currentCameraId = status.last_event.source;
+              const select = document.getElementById("camera-select");
+              if (select) select.value = status.last_event.source;
+
+              const activeLabel = document.getElementById("active-camera-label");
+              if (activeLabel) {
+                activeLabel.innerHTML = `Aktif: <strong class="text-blue-400 font-mono">${status.last_event.name}</strong>`;
+              }
+
+              // Refresh gambar stream
+              const img = document.getElementById("live-stream-img");
+              if (img) img.src = "/video_feed?t=" + new Date().getTime();
+
+              // Tampilkan toast notifikasi auto-switch
+              showToast(status.last_event.message);
+            }
+
+            // Sync toggle auto switch
+            const toggle = document.getElementById("auto-switch-toggle");
+            if (toggle && typeof status.auto_switch_enabled === "boolean") {
+              toggle.checked = status.auto_switch_enabled;
+            }
+          })
+          .catch(() => {});
+      }, 1000);
+
+      // Fungsi Reset Backend (FR-07)
+      function confirmReset() {
+        fetch("/api/reset", { method: "POST" })
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById("stat-total").innerText = 0;
+            document.getElementById("stat-ok").innerText = 0;
+            document.getElementById("stat-ng").innerText = 0;
+            const tbody = document.getElementById("log-table-body");
+            if (tbody) {
+              tbody.innerHTML = '<tr class="hover:bg-slate-750/50 bg-slate-800/20"><td colspan="5" class="px-4 py-6 text-center text-slate-400 font-sans">Belum ada data deteksi yang tercatat.</td></tr>';
+            }
+            closeModal();
+          })
+          .catch((err) => {
+            alert("Gagal mereset data server!");
+            closeModal();
+          });
+      }
+
+      // Inisialisasi daftar kamera saat pertama kali dimuat
+      document.addEventListener("DOMContentLoaded", () => {
+        loadCameras();
+      });
+    </script>
+  </body>
+</html>
