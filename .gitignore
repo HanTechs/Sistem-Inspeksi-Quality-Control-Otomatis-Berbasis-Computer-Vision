@@ -1,0 +1,22 @@
+# Python & Environment
+venv/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Model Weights (di-ignore di Git sesuai Conteks.md)
+models/*.pt
+!models/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & Temp
+*.log
+tmp/
+runs/
